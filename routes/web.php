@@ -23,3 +23,12 @@ Route::get('/test-ai', function (\App\Services\AiService $ai) {
 
     dd($result);
 });
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    // Routes pour l'éditeur du Sprint S2
+    Route::get('/editor/new', [App\Http\Controllers\DocumentController::class, 'create'])->name('editor.create');
+    Route::get('/editor/{document}', [App\Http\Controllers\DocumentController::class, 'edit'])->name('editor.edit');
+    Route::post('/documents', [App\Http\Controllers\DocumentController::class, 'store'])->name('documents.store');
+});
