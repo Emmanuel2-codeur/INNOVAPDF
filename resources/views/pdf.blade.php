@@ -2,9 +2,10 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>PDF</title>
+    <title>Mon PDF</title>
 </head>
 <body>
-    <p>Test</p>
+    <h1>Facture / Document</h1>
+    <p>Ceci est un test fonctionnel avec Dompdf sur Render !</p>
 </body>
 </html>
