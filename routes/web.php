@@ -20,4 +20,6 @@ Route::get('/test-pdf', function () {
 
 Route::get('/test-ai', function (\App\Services\AiService $ai) {
     return $ai->correct('Elle a manger une pomme hier soire.');
+
+    dd($result);
 });
