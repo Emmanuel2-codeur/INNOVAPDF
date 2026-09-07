@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Spatie\LaravelPdf\Facades\Pdf;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -12,10 +12,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 
 Route::get('/test-pdf', function () {
-    return Pdf::html('<h1>Test INNOVAPDF</h1><p>' . now() . '</p>')
-        ->format('a4')
-        ->driver('dompdf')
-        ->download('test.pdf');
+    $pdf = Pdf::loadHTML('<h1>Test INNOVAPDF</h1><p>' . now() . '</p>');
+    return $pdf->download('test.pdf');
 });
 
 Route::get('/test-ai', function (\App\Services\AiService $ai) {
