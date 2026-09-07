@@ -2,9 +2,9 @@
 import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { useDocumentStore } from '@/stores/document';
-import MinimalCV from '@/Components/Templates/CV/Minimal.vue';
-import ModernCV from '@/Components/Templates/CV/Modern.vue';
-import ClassicInvoice from '@/Components/Templates/Invoice/Classic.vue';
+import MinimalCV from '@/components/templates/cv/Minimal.vue';
+import ModernCV from '@/components/templates/cv/Modern.vue';
+import ClassicInvoice from '@/components/templates/invoice/Classic.vue';
 
 const store = useDocumentStore();
 const activeTab = ref<'edit' | 'preview'>('edit');
