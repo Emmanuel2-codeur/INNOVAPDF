@@ -18,8 +18,19 @@ Route::get('/test-pdf', function () {
         ->download('test.pdf');
 });
 
-
 Route::get('/test-ai', function () {
-    // On teste d'abord SANS le AiService
-    dd('LA ROUTE MARCHE !'); 
+    try {
+        // On essaie de charger le service manuellement
+        $ai = app(\App\Services\AiService::class);
+        
+        $result = $ai->correct('Elle a manger une pomme hier soire.');
+        dd($result);
+
+    } catch (\Exception $e) {
+        // Si c'est une erreur classique (ex: API injoignable)
+        dd("Erreur Exception : " . $e->getMessage());
+    } catch (\Error $e) {
+        // Si c'est une erreur fatale (ex: fichier introuvable, classe mal nommée)
+        dd("Erreur Fatale : " . $e->getMessage());
+    }
 });
