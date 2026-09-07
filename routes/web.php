@@ -18,8 +18,8 @@ Route::get('/test-pdf', function () {
         ->download('test.pdf');
 });
 
-Route::get('/test-ai', function (\App\Services\AiService $ai) {
-    return $ai->correct('Elle a manger une pomme hier soire.');
 
-    dd($result);
+Route::get('/test-ai', function () {
+    // On teste d'abord SANS le AiService
+    dd('LA ROUTE MARCHE !'); 
 });
