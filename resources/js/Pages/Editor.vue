@@ -1,30 +1,179 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 import { useDocumentStore } from '@/stores/document';
 import MinimalCV from '@/components/Templates/CV/Minimal.vue';
 import ModernCV from '@/components/Templates/CV/Modern.vue';
 import ClassicInvoice from '@/components/Templates/Invoice/Classic.vue';
 
+// Forme brute renvoyée par le backend (content/style en colonnes JSON séparées)
+interface BackendDocument {
+    id: number;
+    title: string;
+    type: string;
+    template: string;
+    content: {
+        profile?: Record<string, unknown>;
+        experiences?: unknown[];
+        invoiceItems?: unknown[];
+        invoiceMeta?: unknown;          
+    };
+    style: Record<string, unknown>;
+}
+
+const props = defineProps<{
+    document: BackendDocument | null;
+}>();
+
 const store = useDocumentStore();
 const activeTab = ref<'edit' | 'preview'>('edit');
 const isSaving = ref(false);
+const isUploadingPhoto = ref(false);
+const saveError = ref<string | null>(null);
+const documentId = ref<number | null>(null);
+
+const saveSuccess = ref<string | null>(null);
+const saveStatus = ref<'idle' | 'unsaved' | 'saving' | 'saved' | 'error'>('idle');
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let hasLoadedInitialDocument = false;
+const AUTOSAVE_DELAY_MS = 1500;
+
+// watch (et non onMounted) car Inertia réutilise cette même instance de composant
+// quand on est redirigé de /editor/new vers /editor/{id} après création : onMounted
+// ne se redéclencherait pas et l'éditeur resterait figé sur l'état "nouveau document".
+watch(
+    () => props.document,
+    (doc) => {
+        if (!doc) {
+            hasLoadedInitialDocument = true;
+            return;
+        }
+
+        documentId.value = doc.id;
+        store.setDocument({
+            id: doc.id,
+            title: doc.title,
+            type: doc.type as never,
+            template: doc.template,
+            profile: (doc.content?.profile as never) ?? store.currentDocument.profile,
+            experiences: (doc.content?.experiences as never) ?? [],
+            invoiceItems: (doc.content?.invoiceItems as never) ?? [],
+            invoiceMeta: (doc.content?.invoiceMeta as never) ?? store.currentDocument.invoiceMeta,
+            style: (doc.style as never) ?? store.currentDocument.style,
+        });
+
+        // On attend le prochain "tick" réactif pour ne pas déclencher l'autosave
+        // à cause de ce chargement initial (setDocument ci-dessus change aussi currentDocument).
+        setTimeout(() => { hasLoadedInitialDocument = true; }, 0);
+    },
+    { immediate: true }
+);
+
+const buildPayload = () => ({
+    title: store.currentDocument.title,
+    type: store.currentDocument.type,
+    template: store.currentDocument.template,
+    content: {
+        profile: store.currentDocument.profile,
+        experiences: store.currentDocument.experiences,
+        invoiceItems: store.currentDocument.invoiceItems,
+        invoiceMeta: store.currentDocument.invoiceMeta,
+    },
+    style: store.currentDocument.style,
+});
 
 const save = () => {
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+
     isSaving.value = true;
-    router.post('/documents', {
-        title: store.currentDocument.title,
-        type: store.currentDocument.type,
-        template: store.currentDocument.template,
-        content: {
-            profile: store.currentDocument.profile,
-            experiences: store.currentDocument.experiences,
-            invoiceItems: store.currentDocument.invoiceItems,
+    saveStatus.value = 'saving';
+    saveError.value = null;
+    saveSuccess.value = null;
+
+    const onSuccess = () => {
+        saveStatus.value = 'saved';
+        saveSuccess.value = 'Document enregistré.';
+        setTimeout(() => { saveSuccess.value = null; }, 3000);
+    };
+
+    if (documentId.value) {
+        // Document existant : mise à jour
+        router.put(`/documents/${documentId.value}`, buildPayload(), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess,
+            onError: (errors) => {
+                saveStatus.value = 'error';
+                saveError.value = Object.values(errors)[0] as string ?? 'Erreur de sauvegarde.';
+            },
+            onFinish: () => { isSaving.value = false; },
+        });
+        return;
+    }
+
+    // Nouveau document : création, puis on bascule sur l'URL d'édition
+    // pour que les sauvegardes suivantes utilisent PUT (comportement idempotent).
+    router.post('/documents', buildPayload(), {
+        preserveScroll: true,
+        onSuccess,
+        onError: (errors) => {
+            saveStatus.value = 'error';
+            saveError.value = Object.values(errors)[0] as string ?? 'Erreur de sauvegarde.';
         },
-        style: store.currentDocument.style,
-    }, {
-        onFinish: () => { isSaving.value = false; }
+        onFinish: () => { isSaving.value = false; },
     });
+};
+
+// Autosave : toute modification du document déclenche une sauvegarde automatique
+// après un temps mort (debounce), pour respecter le cahier des charges §9 sans
+// spammer le serveur à chaque frappe.
+watch(
+    () => JSON.stringify(store.currentDocument),
+    () => {
+        if (!hasLoadedInitialDocument) return;
+
+        saveStatus.value = 'unsaved';
+
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(() => {
+            autosaveTimer = null;
+            save();
+        }, AUTOSAVE_DELAY_MS);
+    }
+);
+
+const exportPdf = () => {
+    if (!documentId.value) return;
+    window.open(`/documents/${documentId.value}/export`, '_blank');
+};
+
+const onPhotoSelected = async (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    isUploadingPhoto.value = true;
+    saveError.value = null;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (store.currentDocument.profile?.photoUrl) {
+            formData.append('previous_url', store.currentDocument.profile.photoUrl);
+        }
+        const { data } = await axios.post('/media', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (store.currentDocument.profile) {
+            store.currentDocument.profile.photoUrl = data.url;
+        }
+    } catch {
+        saveError.value = "Échec de l'envoi de la photo (format ou taille invalide, 2 Mo max).";
+    } finally {
+        isUploadingPhoto.value = false;
+        input.value = '';
+    }
 };
 </script>
 
@@ -38,18 +187,18 @@ const save = () => {
                 class="text-xl font-bold border-none focus:ring-0 focus:outline-none"
                 placeholder="Titre du document..."
             />
-            
+
             <div class="flex items-center space-x-3">
                 <!-- Bascule mobile -->
                 <div class="md:hidden flex space-x-1">
-                    <button 
+                    <button
                         @click="activeTab = 'edit'"
                         :class="activeTab === 'edit' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
                         class="px-3 py-1 rounded-md text-sm font-medium"
                     >
                         Éditer
                     </button>
-                    <button 
+                    <button
                         @click="activeTab = 'preview'"
                         :class="activeTab === 'preview' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
                         class="px-3 py-1 rounded-md text-sm font-medium"
@@ -57,6 +206,21 @@ const save = () => {
                         Aperçu
                     </button>
                 </div>
+
+                <button
+                    v-if="documentId"
+                    @click="exportPdf"
+                    class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition"
+                >
+                    Exporter en PDF
+                </button>
+
+                <span class="text-xs text-gray-500 flex items-center gap-1 min-w-[140px]">
+                    <span v-if="saveStatus === 'saving'">Enregistrement en cours…</span>
+                    <span v-else-if="saveStatus === 'saved'" class="text-green-600">✓ Enregistré</span>
+                    <span v-else-if="saveStatus === 'unsaved'">Modifications non enregistrées</span>
+                    <span v-else-if="saveStatus === 'error'" class="text-red-600">Échec de l'enregistrement</span>
+                </span>
 
                 <button
                     @click="save"
@@ -68,11 +232,18 @@ const save = () => {
             </div>
         </header>
 
+        <p v-if="saveError" class="bg-red-50 text-red-700 text-sm px-6 py-2 border-b border-red-100">
+            {{ saveError }}
+        </p>
+        <p v-if="saveSuccess" class="bg-green-50 text-green-700 text-sm px-6 py-2 border-b border-green-100">
+            {{ saveSuccess }}
+        </p>
+
         <!-- Corps Dual-Pane -->
         <div class="flex-1 flex overflow-hidden">
             <!-- Formulaire (Panneau Gauche) -->
             <div :class="['w-full md:w-1/2 p-6 overflow-y-auto bg-white border-r space-y-6', activeTab === 'preview' ? 'hidden md:block' : 'block']">
-                
+
                 <!-- Sélection Type & Modèle -->
                 <div class="border-b pb-4 space-y-3">
                     <h2 class="text-md font-semibold text-gray-800">Paramètres du Document</h2>
@@ -97,6 +268,21 @@ const save = () => {
                 <!-- Informations Générales -->
                 <div class="border-b pb-4 space-y-3">
                     <h2 class="text-md font-semibold text-gray-800">Informations Générales</h2>
+
+                    <div v-if="store.currentDocument.type === 'cv'" class="flex items-center space-x-4">
+                        <img
+                            v-if="store.currentDocument.profile?.photoUrl"
+                            :src="store.currentDocument.profile.photoUrl"
+                            class="h-14 w-14 rounded-full object-cover border"
+                            alt="Photo de profil"
+                        />
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Photo de profil</label>
+                            <input type="file" accept="image/png,image/jpeg,image/webp" @change="onPhotoSelected" class="text-xs" />
+                            <p v-if="isUploadingPhoto" class="text-xs text-gray-400">Envoi en cours...</p>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Nom complet</label>
                         <input v-if="store.currentDocument.profile" v-model="store.currentDocument.profile.fullName" type="text" class="mt-1 w-full text-sm rounded border-gray-300" />
@@ -156,6 +342,26 @@ const save = () => {
                         <button @click="store.addEmptyInvoiceItem" class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded font-medium">
                             + Ajouter une ligne
                         </button>
+                    </div>
+
+                    <div v-if="store.currentDocument.invoiceMeta" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">TVA (%)</label>
+                            <input
+                                :value="store.currentDocument.invoiceMeta.taxRate * 100"
+                                @input="store.currentDocument.invoiceMeta!.taxRate = Number(($event.target as HTMLInputElement).value) / 100"
+                                type="number" min="0" max="100" step="0.5"
+                                class="w-full text-sm rounded border-gray-300"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Devise</label>
+                            <select v-model="store.currentDocument.invoiceMeta.currency" class="w-full text-sm rounded border-gray-300">
+                                <option value="FCFA">FCFA</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div v-for="item in store.currentDocument.invoiceItems" :key="item.id" class="p-3 border rounded-md bg-gray-50 space-y-2 relative">

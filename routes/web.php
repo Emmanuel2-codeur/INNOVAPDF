@@ -1,34 +1,32 @@
 <?php
 
+use App\Http\Controllers\DocumentController;
 use Illuminate\Support\Facades\Route;
-use Spatie\LaravelPdf\Facades\Pdf;
 
 Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('/dashboard', [DocumentController::class, 'index'])->name('dashboard');
+
+    // Éditeur (S2)
+    Route::get('/editor/new', [DocumentController::class, 'create'])->name('editor.create');
+    Route::get('/editor/{document}', [DocumentController::class, 'edit'])->name('editor.edit');
+
+    // CRUD documents (S2/S4)
+    Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
+    Route::put('/documents/{document}', [DocumentController::class, 'update'])->name('documents.update');
+    Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+
+    // Export PDF & médias (S3)
+    Route::get('/documents/{document}/export', [DocumentController::class, 'export'])->name('documents.export');
+    Route::post('/media', [DocumentController::class, 'uploadMedia'])->name('media.upload');
+
+    // Corbeille (S4)
+    Route::get('/trash', [DocumentController::class, 'trash'])->name('documents.trash');
+    Route::patch('/documents/{document}/restore', [DocumentController::class, 'restore'])
+        ->name('documents.restore')->withTrashed();
+    Route::delete('/documents/{document}/force', [DocumentController::class, 'forceDelete'])
+        ->name('documents.force-delete')->withTrashed();
 });
 
 require __DIR__.'/settings.php';
-
-Route::get('/test-pdf', function () {
-    return Pdf::html('<h1>Test INNOVAPDF</h1><p>' . now() . '</p>')
-        ->format('a4')
-        ->driver('dompdf')
-        ->download('test.pdf');
-});
-
-Route::get('/test-ai', function (\App\Services\AiService $ai) {
-    return $ai->correct('Elle a manger une pomme hier soire.');
-
-    dd($result);
-});
-
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
-
-    // Routes pour l'éditeur du Sprint S2
-    Route::get('/editor/new', [App\Http\Controllers\DocumentController::class, 'create'])->name('editor.create');
-    Route::get('/editor/{document}', [App\Http\Controllers\DocumentController::class, 'edit'])->name('editor.edit');
-    Route::post('/documents', [App\Http\Controllers\DocumentController::class, 'store'])->name('documents.store');
-});
