@@ -44,5 +44,12 @@ RUN npm run build
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 10. Exposer le port 80 pour Render
+# 10. Script de démarrage : migre la base avant de lancer Apache
+#     (impossible de migrer à l'étape "build" ci-dessus : la base de données
+#     de production n'est pas accessible pendant le build, seulement au runtime).
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+# 11. Exposer le port 80 pour Render
 EXPOSE 80
