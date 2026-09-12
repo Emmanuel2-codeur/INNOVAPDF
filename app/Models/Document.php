@@ -23,6 +23,7 @@ class Document extends Model
     protected $casts = [
         'content' => 'array',
         'style' => 'array',
+        'user_id' => 'integer',
     ];
 
     public function user()
