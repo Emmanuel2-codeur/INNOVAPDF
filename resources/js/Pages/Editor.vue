@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AiAssistant from '@/Components/AI/AiAssistant.vue';
+import AiAssistant from '@/components/AI/AiAssistant.vue';
 import axios from 'axios';
 import { useDocumentStore } from '@/stores/document';
 import MinimalCV from '@/components/Templates/CV/Minimal.vue';
@@ -10,9 +10,9 @@ import ClassicInvoice from '@/components/Templates/Invoice/Classic.vue';
 import CoverLetterDefault from '@/components/Templates/CoverLetter/Default.vue';
 import QuoteSimple from '@/components/Templates/Quote/Simple.vue';
 import CertificateDefault from '@/components/Templates/Certificate/Default.vue';
-import CvScore from '@/Components/CvScore.vue';
-import AtsAnalysis from '@/Components/AtsAnalysis.vue';
-import ShareBox from '@/Components/ShareBox.vue';
+import CvScore from '@/components/CvScore.vue';
+import AtsAnalysis from '@/components/AtsAnalysis.vue';
+import ShareBox from '@/components/ShareBox.vue';
 import { useCvScore } from '@/composables/useCvScore';
 
 const { score: cvScore, issues: cvIssues } = useCvScore(computed(() => store.currentDocument));
@@ -217,7 +217,7 @@ const generateSummary = async () => {
                 experiences: store.currentDocument.experiences,
             },
         });
-        store.currentDocument.profile.summary = data.result;
+        store.currentDocument.profile!.summary = data.result;
     } catch (e: any) {
         saveError.value = e.response?.data?.message ?? "L'assistant IA n'est pas disponible pour le moment.";
     } finally {
@@ -425,10 +425,10 @@ const onPhotoSelected = async (event: Event) => {
                                 <button @click="generateSummary" :disabled="isGeneratingSummary" type="button" class="text-xs text-indigo-600 hover:underline font-medium disabled:opacity-50">
                                     {{ isGeneratingSummary ? 'Génération…' : '✨ Générer avec l\'IA' }}
                                 </button>
-                                <AiAssistant v-model="store.currentDocument.profile.summary" />
+                                <AiAssistant v-model="store.currentDocument.profile!.summary" />
                             </div>
                         </div>
-                        <textarea v-model="store.currentDocument.profile.summary" rows="3" placeholder="Résumé professionnel..." class="mt-1 w-full text-sm rounded border-gray-300"></textarea>
+                        <textarea v-model="store.currentDocument.profile!.summary" rows="3" placeholder="Résumé professionnel..." class="mt-1 w-full text-sm rounded border-gray-300"></textarea>
                     </div>
                 </div>
 
