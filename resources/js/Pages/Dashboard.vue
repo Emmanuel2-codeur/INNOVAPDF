@@ -73,6 +73,7 @@ const confirmDelete = (doc: DocumentRow) => {
             <h1 class="text-xl font-bold text-gray-800">Mes documents</h1>
             <div class="flex items-center gap-3">
                 <Link href="/trash" class="text-sm text-gray-500 hover:underline">Corbeille</Link>
+                <Link href="/premium" class="text-sm text-amber-600 hover:underline font-medium">✨ Premium</Link>
                 <Link
                     href="/editor/new"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition"

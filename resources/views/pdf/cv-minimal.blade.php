@@ -5,6 +5,17 @@
     $experiences = $content['experiences'] ?? [];
     $primaryColor = $style['primaryColor'] ?? '#4f46e5';
     $fontFamily = $style['fontFamily'] ?? 'Helvetica, Arial, sans-serif';
+
+    // Dompdf a besoin d'un chemin de fichier local (pas d'une URL http) pour
+    // afficher une image sans activer les requêtes réseau distantes.
+    $photoPath = null;
+    if (!empty($profile['photoUrl'])) {
+        $relative = preg_replace('#^/?storage/#', '', parse_url($profile['photoUrl'], PHP_URL_PATH) ?? '');
+        $full = storage_path('app/public/' . $relative);
+        if (is_file($full)) {
+            $photoPath = $full;
+        }
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="fr">
@@ -18,7 +29,10 @@
         .subtitle { font-size: 14px; color: #4b5563; margin: 4px 0 10px; }
         .contact { font-size: 9px; color: #6b7280; }
         .contact span { margin-right: 14px; }
-        header { border-bottom: 2px solid {{ $primaryColor }}; padding-bottom: 14px; margin-bottom: 20px; }
+        header { border-bottom: 2px solid {{ $primaryColor }}; padding-bottom: 14px; margin-bottom: 20px; overflow: hidden; }
+        .photo { float: left; width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-right: 16px; }
+        .header-text { overflow: hidden; }
+        .summary { font-size: 10px; color: #4b5563; margin: 0 0 16px; white-space: pre-line; }
         h2.section { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: {{ $primaryColor }}; margin: 0 0 10px; }
         .experience { border-left: 2px solid {{ $primaryColor }}; padding-left: 10px; margin-bottom: 14px; page-break-inside: avoid; }
         .experience .row { width: 100%; }
@@ -30,14 +44,21 @@
 </head>
 <body>
     <header>
-        <h1>{{ $profile['fullName'] ?? 'Nom Prénom' }}</h1>
-        <p class="subtitle">{{ $profile['title'] ?? 'Titre du poste' }}</p>
-        <p class="contact">
-            @if(!empty($profile['email']))<span>{{ $profile['email'] }}</span>@endif
-            @if(!empty($profile['phone']))<span>{{ $profile['phone'] }}</span>@endif
-            @if(!empty($profile['location']))<span>{{ $profile['location'] }}</span>@endif
-        </p>
+        @if($photoPath)<img src="{{ $photoPath }}" class="photo" alt="Photo">@endif
+        <div class="header-text">
+            <h1>{{ $profile['fullName'] ?? 'Nom Prénom' }}</h1>
+            <p class="subtitle">{{ $profile['title'] ?? 'Titre du poste' }}</p>
+            <p class="contact">
+                @if(!empty($profile['email']))<span>{{ $profile['email'] }}</span>@endif
+                @if(!empty($profile['phone']))<span>{{ $profile['phone'] }}</span>@endif
+                @if(!empty($profile['location']))<span>{{ $profile['location'] }}</span>@endif
+            </p>
+        </div>
     </header>
+
+    @if(!empty($profile['summary']))
+        <p class="summary">{{ $profile['summary'] }}</p>
+    @endif
 
     @if(!empty($experiences))
         <section>

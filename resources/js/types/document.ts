@@ -27,6 +27,27 @@ export interface InvoiceItem {
     total: number;
 }
 
+export interface CertificateData {
+    recipientName: string;
+    purpose: string;
+    body: string;
+    issueDate: string;
+    issuerName: string;
+    issuerTitle: string;
+}
+
+export interface CoverLetterData {
+    recipientName: string;
+    recipientCompany: string;
+    subject: string;
+    body: string;
+}
+
+export interface InvoiceMeta {
+    taxRate: number; // ex: 0.18 pour 18%
+    currency: string; // ex: 'FCFA', 'EUR', 'USD'
+}
+
 export interface StyleConfig {
     primaryColor: string;
     secondaryColor?: string;
@@ -43,5 +64,8 @@ export interface DocumentSchema {
     profile?: ProfileData;
     experiences?: ExperienceItem[];
     invoiceItems?: InvoiceItem[];
+    invoiceMeta?: InvoiceMeta;
+    coverLetter?: CoverLetterData;
+    certificate?: CertificateData;
     style: StyleConfig;
 }

@@ -23,9 +23,9 @@ const total = computed(() => subtotal.value + taxAmount.value);
             <div class="flex justify-between items-start mb-10 border-b pb-6">
                 <div>
                     <h1 class="text-3xl font-extrabold tracking-tight" :style="{ color: doc.style.primaryColor }">
-                        FACTURE
+                        DEVIS
                     </h1>
-                    <p class="text-xs text-gray-500 mt-1">Réf : {{ doc.title || 'FACT-2026-001' }}</p>
+                    <p class="text-xs text-gray-500 mt-1">Réf : {{ doc.title || 'DEVIS-2026-001' }}</p>
                 </div>
                 <div class="text-right text-xs text-gray-600 space-y-1">
                     <p class="font-bold text-gray-900 text-sm">{{ doc.profile?.fullName || 'Votre Nom / Entreprise' }}</p>
@@ -78,7 +78,7 @@ const total = computed(() => subtotal.value + taxAmount.value);
             </div>
 
             <div class="text-center text-[10px] text-gray-400 border-t pt-4">
-                Merci pour votre confiance. Facture générée via INNOVAPDF.
+                Merci pour votre confiance. Devis généré via INNOVAPDF. Valable 30 jours.
             </div>
         </div>
     </div>

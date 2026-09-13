@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
+import AiAssistant from '@/Components/AI/AiAssistant.vue';
 import axios from 'axios';
 import { useDocumentStore } from '@/stores/document';
 import MinimalCV from '@/components/Templates/CV/Minimal.vue';
 import ModernCV from '@/components/Templates/CV/Modern.vue';
 import ClassicInvoice from '@/components/Templates/Invoice/Classic.vue';
+import CoverLetterDefault from '@/components/Templates/CoverLetter/Default.vue';
+import QuoteSimple from '@/components/Templates/Quote/Simple.vue';
+import CertificateDefault from '@/components/Templates/Certificate/Default.vue';
+import CvScore from '@/Components/CvScore.vue';
+import AtsAnalysis from '@/Components/AtsAnalysis.vue';
+import ShareBox from '@/Components/ShareBox.vue';
+import { useCvScore } from '@/composables/useCvScore';
+
+const { score: cvScore, issues: cvIssues } = useCvScore(computed(() => store.currentDocument));
 
 // Forme brute renvoyée par le backend (content/style en colonnes JSON séparées)
 interface BackendDocument {
@@ -17,19 +27,66 @@ interface BackendDocument {
         profile?: Record<string, unknown>;
         experiences?: unknown[];
         invoiceItems?: unknown[];
-        invoiceMeta?: unknown;          
+        invoiceMeta?: unknown;
+        coverLetter?: unknown;
+        certificate?: unknown;
     };
     style: Record<string, unknown>;
 }
 
 const props = defineProps<{
     document: BackendDocument | null;
+    shareUrl?: string | null;
 }>();
 
 const store = useDocumentStore();
 const activeTab = ref<'edit' | 'preview'>('edit');
 const isSaving = ref(false);
 const isUploadingPhoto = ref(false);
+const isImportingCv = ref(false);
+
+const importCv = async (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    isImportingCv.value = true;
+    saveError.value = null;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const { data } = await axios.post('/import-cv', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const p = data.profile;
+        store.currentDocument.profile = {
+            fullName: p.fullName || '',
+            title: p.title || '',
+            email: p.email || '',
+            phone: p.phone || '',
+            location: p.location || '',
+            summary: p.summary || '',
+        };
+        store.currentDocument.experiences = (p.experiences || []).map((e: any) => ({
+            id: crypto.randomUUID(),
+            company: e.company || '',
+            position: e.position || '',
+            startDate: e.startDate || '',
+            endDate: e.endDate || '',
+            description: e.description || '',
+        }));
+
+        saveSuccess.value = 'CV importé — vérifie et corrige les informations avant de sauvegarder.';
+        setTimeout(() => { saveSuccess.value = null; }, 5000);
+    } catch (e: any) {
+        saveError.value = e.response?.data?.message ?? "L'import du CV a échoué.";
+    } finally {
+        isImportingCv.value = false;
+        input.value = '';
+    }
+};
 const saveError = ref<string | null>(null);
 const documentId = ref<number | null>(null);
 
@@ -60,6 +117,8 @@ watch(
             experiences: (doc.content?.experiences as never) ?? [],
             invoiceItems: (doc.content?.invoiceItems as never) ?? [],
             invoiceMeta: (doc.content?.invoiceMeta as never) ?? store.currentDocument.invoiceMeta,
+            coverLetter: (doc.content?.coverLetter as never) ?? store.currentDocument.coverLetter,
+            certificate: (doc.content?.certificate as never) ?? store.currentDocument.certificate,
             style: (doc.style as never) ?? store.currentDocument.style,
         });
 
@@ -79,6 +138,8 @@ const buildPayload = () => ({
         experiences: store.currentDocument.experiences,
         invoiceItems: store.currentDocument.invoiceItems,
         invoiceMeta: store.currentDocument.invoiceMeta,
+        coverLetter: store.currentDocument.coverLetter,
+        certificate: store.currentDocument.certificate,
     },
     style: store.currentDocument.style,
 });
@@ -143,9 +204,51 @@ watch(
     }
 );
 
+const isGeneratingSummary = ref(false);
+
+const generateSummary = async () => {
+    isGeneratingSummary.value = true;
+    saveError.value = null;
+
+    try {
+        const { data } = await axios.post('/ai/summary', {
+            context: {
+                profile: store.currentDocument.profile,
+                experiences: store.currentDocument.experiences,
+            },
+        });
+        store.currentDocument.profile.summary = data.result;
+    } catch (e: any) {
+        saveError.value = e.response?.data?.message ?? "L'assistant IA n'est pas disponible pour le moment.";
+    } finally {
+        isGeneratingSummary.value = false;
+    }
+};
+
 const exportPdf = () => {
     if (!documentId.value) return;
-    window.open(`/documents/${documentId.value}/export`, '_blank');
+
+    // On force une sauvegarde immédiate avant d'exporter : sinon, si l'autosave
+    // (debounce 1,5s) n'a pas encore eu le temps de tourner, le PDF exporté
+    // correspondrait à l'ancienne version enregistrée en base, pas à l'écran.
+    if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+
+    isSaving.value = true;
+    saveStatus.value = 'saving';
+
+    router.put(`/documents/${documentId.value}`, buildPayload(), {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            saveStatus.value = 'saved';
+            window.open(`/documents/${documentId.value}/export`, '_blank');
+        },
+        onError: (errors) => {
+            saveStatus.value = 'error';
+            saveError.value = Object.values(errors)[0] as string ?? 'Erreur de sauvegarde avant export.';
+        },
+        onFinish: () => { isSaving.value = false; },
+    });
 };
 
 const onPhotoSelected = async (event: Event) => {
@@ -251,8 +354,19 @@ const onPhotoSelected = async (event: Event) => {
                         <label class="block text-sm font-medium text-gray-700">Type de Document</label>
                         <select v-model="store.currentDocument.type" class="w-full text-sm rounded border-gray-300 mt-1">
                             <option value="cv">Curriculum Vitae (CV)</option>
+                            <option value="cover_letter">Lettre de motivation</option>
                             <option value="invoice">Facture</option>
+                            <option value="quote">Devis</option>
+                            <option value="attestation">Attestation</option>
+                            <option value="certificate">Certificat</option>
                         </select>
+                    </div>
+
+                    <div v-if="!documentId && store.currentDocument.type === 'cv'">
+                        <label class="text-xs text-indigo-600 hover:underline font-medium cursor-pointer inline-flex items-center gap-1">
+                            <input type="file" accept="application/pdf" class="hidden" @change="importCv" :disabled="isImportingCv" />
+                            {{ isImportingCv ? 'Import en cours…' : '📄 Importer un CV existant (PDF)' }}
+                        </label>
                     </div>
 
                     <div>
@@ -260,7 +374,10 @@ const onPhotoSelected = async (event: Event) => {
                         <select v-model="store.currentDocument.template" class="w-full text-sm rounded border-gray-300 mt-1">
                             <option v-if="store.currentDocument.type === 'cv'" value="minimal">CV Minimal</option>
                             <option v-if="store.currentDocument.type === 'cv'" value="modern">CV Modern</option>
+                            <option v-if="store.currentDocument.type === 'cover_letter'" value="default">Lettre standard</option>
                             <option v-if="store.currentDocument.type === 'invoice'" value="classic">Facture Classic</option>
+                            <option v-if="store.currentDocument.type === 'quote'" value="simple">Devis Simple</option>
+                            <option v-if="['attestation', 'certificate'].includes(store.currentDocument.type)" value="default">Modèle standard</option>
                         </select>
                     </div>
                 </div>
@@ -301,6 +418,18 @@ const onPhotoSelected = async (event: Event) => {
                             <input v-if="store.currentDocument.profile" v-model="store.currentDocument.profile.phone" type="text" class="mt-1 w-full text-sm rounded border-gray-300" />
                         </div>
                     </div>
+                    <div class="mt-3" v-if="store.currentDocument.type === 'cv'">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-gray-700">Résumé</label>
+                            <div class="flex items-center gap-2">
+                                <button @click="generateSummary" :disabled="isGeneratingSummary" type="button" class="text-xs text-indigo-600 hover:underline font-medium disabled:opacity-50">
+                                    {{ isGeneratingSummary ? 'Génération…' : '✨ Générer avec l\'IA' }}
+                                </button>
+                                <AiAssistant v-model="store.currentDocument.profile.summary" />
+                            </div>
+                        </div>
+                        <textarea v-model="store.currentDocument.profile.summary" rows="3" placeholder="Résumé professionnel..." class="mt-1 w-full text-sm rounded border-gray-300"></textarea>
+                    </div>
                 </div>
 
                 <!-- Options de Style -->
@@ -332,11 +461,77 @@ const onPhotoSelected = async (event: Event) => {
                             <input v-model="exp.endDate" placeholder="Fin (ex: Présent)" class="text-sm rounded border-gray-300" />
                         </div>
                         <textarea v-model="exp.description" placeholder="Missions..." class="w-full text-sm rounded border-gray-300 rows-2"></textarea>
+                        <AiAssistant v-model="exp.description" />
                     </div>
                 </div>
 
-                <!-- Section Articles (si Type === 'invoice') -->
-                <div v-if="store.currentDocument.type === 'invoice'" class="space-y-4">
+                <div v-if="store.currentDocument.type === 'cv'" class="space-y-4">
+                    <CvScore :score="cvScore" :issues="cvIssues" />
+                    <AtsAnalysis :doc="store.currentDocument" />
+                </div>
+
+                <ShareBox v-if="documentId" :document-id="documentId" :share-url="props.shareUrl ?? null" />
+
+                <!-- Section Attestation / Certificat -->
+                <div v-if="['attestation', 'certificate'].includes(store.currentDocument.type) && store.currentDocument.certificate" class="border-b pb-4 space-y-3">
+                    <h2 class="text-md font-semibold text-gray-800">{{ store.currentDocument.type === 'certificate' ? 'Certificat' : 'Attestation' }}</h2>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nom du bénéficiaire</label>
+                        <input v-model="store.currentDocument.certificate.recipientName" type="text" class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Objet</label>
+                        <input v-model="store.currentDocument.certificate.purpose" type="text" placeholder="Attestation de travail, de stage, de formation..." class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-gray-700">Texte</label>
+                            <AiAssistant v-model="store.currentDocument.certificate.body" />
+                        </div>
+                        <textarea v-model="store.currentDocument.certificate.body" rows="6" placeholder="Je soussigné(e)..." class="mt-1 w-full text-sm rounded border-gray-300"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Date d'émission</label>
+                            <input v-model="store.currentDocument.certificate.issueDate" type="date" class="mt-1 w-full text-sm rounded border-gray-300" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Signataire</label>
+                            <input v-model="store.currentDocument.certificate.issuerName" type="text" class="mt-1 w-full text-sm rounded border-gray-300" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fonction du signataire</label>
+                        <input v-model="store.currentDocument.certificate.issuerTitle" type="text" placeholder="Directeur RH, Responsable formation..." class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                </div>
+
+                <!-- Section Lettre de motivation -->
+                <div v-if="store.currentDocument.type === 'cover_letter' && store.currentDocument.coverLetter" class="border-b pb-4 space-y-3">
+                    <h2 class="text-md font-semibold text-gray-800">Lettre de motivation</h2>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Destinataire</label>
+                        <input v-model="store.currentDocument.coverLetter.recipientName" type="text" placeholder="Nom du recruteur" class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Entreprise</label>
+                        <input v-model="store.currentDocument.coverLetter.recipientCompany" type="text" class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Objet</label>
+                        <input v-model="store.currentDocument.coverLetter.subject" type="text" placeholder="Candidature au poste de..." class="mt-1 w-full text-sm rounded border-gray-300" />
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-gray-700">Corps de la lettre</label>
+                            <AiAssistant v-model="store.currentDocument.coverLetter.body" />
+                        </div>
+                        <textarea v-model="store.currentDocument.coverLetter.body" rows="10" placeholder="Madame, Monsieur,..." class="mt-1 w-full text-sm rounded border-gray-300"></textarea>
+                    </div>
+                </div>
+
+                <!-- Section Articles (si Type === 'invoice' ou 'quote') -->
+                <div v-if="['invoice', 'quote'].includes(store.currentDocument.type)" class="space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="text-md font-semibold text-gray-800">Articles / Prestations</h2>
                         <button @click="store.addEmptyInvoiceItem" class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded font-medium">
@@ -383,6 +578,9 @@ const onPhotoSelected = async (event: Event) => {
                     <MinimalCV v-if="store.currentDocument.type === 'cv' && store.currentDocument.template === 'minimal'" :doc="store.currentDocument" />
                     <ModernCV v-if="store.currentDocument.type === 'cv' && store.currentDocument.template === 'modern'" :doc="store.currentDocument" />
                     <ClassicInvoice v-if="store.currentDocument.type === 'invoice' && store.currentDocument.template === 'classic'" :doc="store.currentDocument" />
+                    <CoverLetterDefault v-if="store.currentDocument.type === 'cover_letter' && store.currentDocument.template === 'default'" :doc="store.currentDocument" />
+                    <QuoteSimple v-if="store.currentDocument.type === 'quote' && store.currentDocument.template === 'simple'" :doc="store.currentDocument" />
+                    <CertificateDefault v-if="['attestation', 'certificate'].includes(store.currentDocument.type)" :doc="store.currentDocument" />
                 </div>
             </div>
         </div>

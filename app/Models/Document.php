@@ -30,4 +30,24 @@ class Document extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** Active (ou renouvelle) le partage : génère un nouveau jeton secret. */
+    public function enableSharing(): string
+    {
+        $this->share_token = (string) \Illuminate\Support\Str::uuid();
+        $this->save();
+
+        return $this->share_token;
+    }
+
+    public function disableSharing(): void
+    {
+        $this->share_token = null;
+        $this->save();
+    }
+
+    public function shareUrl(): ?string
+    {
+        return $this->share_token ? url("/share/{$this->share_token}") : null;
+    }
 }

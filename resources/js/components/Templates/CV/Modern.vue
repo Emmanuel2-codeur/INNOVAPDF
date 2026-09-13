@@ -11,6 +11,12 @@ defineProps<{
         <!-- Sidebar Gauche Colorée -->
         <div class="w-1/3 p-6 text-white space-y-6" :style="{ backgroundColor: doc.style.primaryColor }">
             <div class="text-center space-y-2">
+                <img
+                    v-if="doc.profile?.photoUrl"
+                    :src="doc.profile.photoUrl"
+                    class="w-24 h-24 rounded-full object-cover mx-auto border-2 border-white/50"
+                    alt="Photo de profil"
+                />
                 <h1 class="text-xl font-bold uppercase tracking-wide">
                     {{ doc.profile?.fullName || 'Nom Prénom' }}
                 </h1>

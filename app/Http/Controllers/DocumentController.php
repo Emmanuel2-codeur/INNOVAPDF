@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Spatie\LaravelPdf\Facades\Pdf;
@@ -46,11 +47,18 @@ class DocumentController extends Controller
 
         return Inertia::render('Editor', [
             'document' => $document,
+            'shareUrl' => $document->shareUrl(),
         ]);
     }
 
     public function store(Request $request)
     {
+        if ($request->user()->hasReachedDocumentLimit()) {
+            return back()->withErrors([
+                'quota' => 'Limite de ' . \App\Models\User::FREE_PLAN_LIMITS['documents'] . ' documents atteinte pour le plan gratuit. Passe à Premium pour continuer.',
+            ]);
+        }
+
         $validated = $this->validateDocument($request);
 
         $document = $request->user()->documents()->create($validated);
@@ -104,9 +112,34 @@ class DocumentController extends Controller
     {
         $this->authorize('forceDelete', $document);
 
+        Log::info('Suppression définitive de document', ['document_id' => $document->id, 'user_id' => $request->user()->id]);
+
         $document->forceDelete();
 
         return back()->with('success', 'Document supprimé définitivement.');
+    }
+
+    /**
+     * Active le partage par lien secret et renvoie l'URL + un QR code (S7).
+     */
+    public function share(Request $request, Document $document)
+    {
+        $this->authorize('update', $document);
+
+        $document->enableSharing();
+
+        Log::info('Partage activé', ['document_id' => $document->id, 'user_id' => $request->user()->id]);
+
+        return back()->with('success', 'Partage activé.');
+    }
+
+    public function unshare(Request $request, Document $document)
+    {
+        $this->authorize('update', $document);
+
+        $document->disableSharing();
+
+        return back()->with('success', 'Partage désactivé.');
     }
 
     /**
@@ -120,7 +153,11 @@ class DocumentController extends Controller
         $view = match ("{$document->type}.{$document->template}") {
             'cv.minimal' => 'pdf.cv-minimal',
             'cv.modern' => 'pdf.cv-modern',
+            'cover_letter.default' => 'pdf.cover-letter',
             'invoice.classic' => 'pdf.invoice-classic',
+            'quote.simple' => 'pdf.quote-simple',
+            'attestation.default' => 'pdf.certificate',
+            'certificate.default' => 'pdf.certificate',
             default => null,
         };
 
@@ -152,9 +189,13 @@ class DocumentController extends Controller
             $previousPath = ltrim(parse_url($validated['previous_url'], PHP_URL_PATH) ?? '', '/');
             $previousPath = preg_replace('#^storage/#', '', $previousPath);
 
-            // On ne supprime que si le fichier appartient bien au dossier de l'utilisateur courant,
-            // pour éviter qu'un utilisateur ne fasse supprimer le média d'un autre.
-            if (str_starts_with($previousPath, $userMediaPrefix) && Storage::disk('public')->exists($previousPath)) {
+            // Comparaison par chemin réel (realpath) plutôt que par simple préfixe
+            // de texte : empêche un chemin du type "media/123/../456/x.jpg" de
+            // contourner le contrôle de propriété par un ../ malicieux.
+            $baseDir = realpath(Storage::disk('public')->path('media/' . $request->user()->id));
+            $targetPath = realpath(Storage::disk('public')->path($previousPath));
+
+            if ($baseDir && $targetPath && str_starts_with($targetPath, $baseDir)) {
                 Storage::disk('public')->delete($previousPath);
             }
         }

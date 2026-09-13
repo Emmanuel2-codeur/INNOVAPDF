@@ -18,6 +18,24 @@ export const useDocumentStore = defineStore('document', () => {
         },
         experiences: [],
         invoiceItems: [],
+        invoiceMeta: {
+            taxRate: 0.18,
+            currency: 'FCFA',
+        },
+        coverLetter: {
+            recipientName: '',
+            recipientCompany: '',
+            subject: '',
+            body: '',
+        },
+        certificate: {
+            recipientName: '',
+            purpose: '',
+            body: '',
+            issueDate: '',
+            issuerName: '',
+            issuerTitle: '',
+        },
         style: {
             primaryColor: '#4f46e5',
             secondaryColor: '#64748b',

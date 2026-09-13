@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
+
+        $middleware->alias([
+            'ai.quota' => \App\Http\Middleware\EnforceAiQuota::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

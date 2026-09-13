@@ -10,17 +10,30 @@ defineProps<{
 <template>
     <div class="h-full w-full bg-white text-gray-800" :style="{ fontFamily: doc.style.fontFamily }">
         <!-- En-tête -->
-        <header class="border-b-2 pb-4 mb-6" :style="{ borderColor: doc.style.primaryColor }">
-            <h1 class="text-3xl font-bold uppercase tracking-wide" :style="{ color: doc.style.primaryColor }">
-                {{ doc.profile?.fullName || 'Nom Prénom' }}
-            </h1>
-            <p class="text-lg font-medium text-gray-600">{{ doc.profile?.title || 'Titre du poste' }}</p>
-            <div class="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
-                <span v-if="doc.profile?.email">📧 {{ doc.profile.email }}</span>
-                <span v-if="doc.profile?.phone">📞 {{ doc.profile.phone }}</span>
-                <span v-if="doc.profile?.location">📍 {{ doc.profile.location }}</span>
+        <header class="border-b-2 pb-4 mb-6 flex items-center gap-4" :style="{ borderColor: doc.style.primaryColor }">
+            <img
+                v-if="doc.profile?.photoUrl"
+                :src="doc.profile.photoUrl"
+                class="w-20 h-20 rounded-full object-cover shrink-0"
+                alt="Photo de profil"
+            />
+            <div>
+                <h1 class="text-3xl font-bold uppercase tracking-wide" :style="{ color: doc.style.primaryColor }">
+                    {{ doc.profile?.fullName || 'Nom Prénom' }}
+                </h1>
+                <p class="text-lg font-medium text-gray-600">{{ doc.profile?.title || 'Titre du poste' }}</p>
+                <div class="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span v-if="doc.profile?.email">📧 {{ doc.profile.email }}</span>
+                    <span v-if="doc.profile?.phone">📞 {{ doc.profile.phone }}</span>
+                    <span v-if="doc.profile?.location">📍 {{ doc.profile.location }}</span>
+                </div>
             </div>
         </header>
+
+        <!-- Résumé -->
+        <section v-if="doc.profile?.summary" class="mb-6">
+            <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{{ doc.profile.summary }}</p>
+        </section>
 
         <!-- Expériences -->
         <section v-if="doc.experiences && doc.experiences.length" class="mb-6">

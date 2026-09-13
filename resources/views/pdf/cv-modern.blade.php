@@ -2,18 +2,20 @@
     $content = $doc->content ?? [];
     $style = $doc->style ?? [];
     $profile = $content['profile'] ?? [];
-    $items = $content['invoiceItems'] ?? [];
+    $experiences = $content['experiences'] ?? [];
     $primaryColor = $style['primaryColor'] ?? '#4f46e5';
     $fontFamily = $style['fontFamily'] ?? 'Helvetica, Arial, sans-serif';
 
-    $invoiceMeta = $content['invoiceMeta'] ?? [];
-    $taxRate = (float) ($invoiceMeta['taxRate'] ?? 0.18);
-    $currency = $invoiceMeta['currency'] ?? 'FCFA';
-    $subtotal = array_reduce($items, fn ($sum, $item) => $sum + (($item['quantity'] ?? 0) * ($item['unitPrice'] ?? 0)), 0);
-    $taxAmount = $subtotal * $taxRate;
-    $total = $subtotal + $taxAmount;
-
-    $money = fn ($n) => number_format((float) $n, 0, ',', ' ') . ' ' . $currency;
+    // Dompdf a besoin d'un chemin de fichier local (pas d'une URL http) pour
+    // afficher une image sans activer les requêtes réseau distantes.
+    $photoPath = null;
+    if (!empty($profile['photoUrl'])) {
+        $relative = preg_replace('#^/?storage/#', '', parse_url($profile['photoUrl'], PHP_URL_PATH) ?? '');
+        $full = storage_path('app/public/' . $relative);
+        if (is_file($full)) {
+            $photoPath = $full;
+        }
+    }
 @endphp
 <!DOCTYPE html>
 <html lang="fr">
@@ -21,79 +23,61 @@
     <meta charset="utf-8">
     <title>{{ $doc->title }}</title>
     <style>
-        @page { margin: 20mm 18mm; }
-        body { font-family: {{ $fontFamily }}; color: #1f2937; font-size: 11px; }
-        .header-table { width: 100%; border-bottom: 1px solid #e5e7eb; padding-bottom: 18px; margin-bottom: 26px; }
-        .header-table td { vertical-align: top; }
-        h1 { font-size: 24px; font-weight: bold; letter-spacing: 1px; color: {{ $primaryColor }}; margin: 0; }
-        .ref { font-size: 9px; color: #6b7280; margin-top: 4px; }
-        .issuer { text-align: right; font-size: 9px; color: #4b5563; }
-        .issuer .name { font-weight: bold; color: #111827; font-size: 11px; }
-        table.items { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        table.items th { text-align: left; font-size: 9px; text-transform: uppercase; border-bottom: 2px solid {{ $primaryColor }}; padding: 6px 4px; color: #374151; }
-        table.items td { font-size: 10px; padding: 8px 4px; border-bottom: 1px solid #f3f4f6; color: #374151; }
-        table.items th.num, table.items td.num { text-align: right; }
-        table.items th.center, table.items td.center { text-align: center; }
-        table.totals { width: 45%; margin-left: 55%; font-size: 10px; }
-        table.totals td { padding: 4px 0; }
-        table.totals td.label { color: #6b7280; }
-        table.totals td.value { text-align: right; font-weight: bold; color: #111827; }
-        table.totals tr.total td { border-top: 1px solid #d1d5db; padding-top: 8px; font-size: 13px; color: {{ $primaryColor }}; }
-        .footer { margin-top: 40px; text-align: center; font-size: 9px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+        @page { margin: 0; }
+        body { font-family: {{ $fontFamily }}; color: #1f2937; font-size: 11px; margin: 0; }
+        table.layout { width: 100%; border-collapse: collapse; height: 297mm; }
+        td.sidebar { width: 33%; background-color: {{ $primaryColor }}; color: #fff; padding: 24mm 10mm; vertical-align: top; }
+        td.main { width: 67%; padding: 24mm 14mm; vertical-align: top; }
+        .photo { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 14px; border: 2px solid rgba(255,255,255,0.5); }
+        .name { font-size: 17px; font-weight: bold; text-transform: uppercase; text-align: center; letter-spacing: 1px; margin: 0; }
+        .job-title { font-size: 10px; text-align: center; opacity: 0.9; margin: 4px 0 20px; }
+        .side-section { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.25); padding-top: 12px; }
+        .side-section h3 { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px; }
+        .side-section p { font-size: 9px; margin: 0 0 6px; opacity: 0.95; word-wrap: break-word; }
+        h2.section { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: {{ $primaryColor }}; border-bottom: 2px solid {{ $primaryColor }}; padding-bottom: 4px; margin: 0 0 14px; }
+        .experience { margin-bottom: 14px; page-break-inside: avoid; }
+        .experience .position { font-weight: bold; font-size: 12px; color: #111827; }
+        .experience .dates { float: right; font-size: 9px; color: #6b7280; }
+        .experience .company { font-size: 10px; font-weight: bold; color: #4b5563; margin: 2px 0; }
+        .experience .description { font-size: 10px; color: #4b5563; white-space: pre-line; }
     </style>
 </head>
 <body>
-    <table class="header-table">
+    <table class="layout">
         <tr>
-            <td style="width: 50%;">
-                <h1>FACTURE</h1>
-                <p class="ref">Réf : {{ $doc->title ?: 'FACT-2026-001' }}</p>
+            <td class="sidebar">
+                @if($photoPath)<img src="{{ $photoPath }}" class="photo" alt="Photo">@endif
+                <p class="name">{{ $profile['fullName'] ?? 'Nom Prénom' }}</p>
+                <p class="job-title">{{ $profile['title'] ?? 'Titre du poste' }}</p>
+
+                <div class="side-section">
+                    <h3>Contact</h3>
+                    @if(!empty($profile['email']))<p>{{ $profile['email'] }}</p>@endif
+                    @if(!empty($profile['phone']))<p>{{ $profile['phone'] }}</p>@endif
+                    @if(!empty($profile['location']))<p>{{ $profile['location'] }}</p>@endif
+                </div>
+
+                @if(!empty($profile['summary']))
+                    <div class="side-section">
+                        <h3>À propos</h3>
+                        <p>{{ $profile['summary'] }}</p>
+                    </div>
+                @endif
             </td>
-            <td class="issuer" style="width: 50%;">
-                <p class="name">{{ $profile['fullName'] ?? 'Votre Nom / Entreprise' }}</p>
-                @if(!empty($profile['email']))<p>{{ $profile['email'] }}</p>@endif
-                @if(!empty($profile['phone']))<p>{{ $profile['phone'] }}</p>@endif
-                @if(!empty($profile['location']))<p>{{ $profile['location'] }}</p>@endif
+            <td class="main">
+                @if(!empty($experiences))
+                    <h2 class="section">Expériences Professionnelles</h2>
+                    @foreach($experiences as $exp)
+                        <div class="experience">
+                            <span class="position">{{ $exp['position'] ?? '' }}</span>
+                            <span class="dates">{{ $exp['startDate'] ?? '' }} - {{ $exp['endDate'] ?? 'Présent' }}</span>
+                            <div class="company">{{ $exp['company'] ?? '' }}</div>
+                            <div class="description">{{ $exp['description'] ?? '' }}</div>
+                        </div>
+                    @endforeach
+                @endif
             </td>
         </tr>
     </table>
-
-    <table class="items">
-        <thead>
-            <tr>
-                <th>Désignation</th>
-                <th class="center">Quantité</th>
-                <th class="num">Prix Unitaire</th>
-                <th class="num">Total HT</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($items as $item)
-                <tr>
-                    <td>{{ $item['description'] ?? "Description de l'article" }}</td>
-                    <td class="center">{{ $item['quantity'] ?? 0 }}</td>
-                    <td class="num">{{ $money($item['unitPrice'] ?? 0) }}</td>
-                    <td class="num">{{ $money(($item['quantity'] ?? 0) * ($item['unitPrice'] ?? 0)) }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-
-    <table class="totals">
-        <tr>
-            <td class="label">Sous-total HT :</td>
-            <td class="value">{{ $money($subtotal) }}</td>
-        </tr>
-        <tr>
-            <td class="label">TVA ({{ rtrim(rtrim(number_format($taxRate * 100, 1), '0'), '.') }}%) :</td>
-            <td class="value">{{ $money($taxAmount) }}</td>
-        </tr>
-        <tr class="total">
-            <td class="label">Total TTC :</td>
-            <td class="value">{{ $money($total) }}</td>
-        </tr>
-    </table>
-
-    <div class="footer">Merci pour votre confiance. Facture générée via INNOVAPDF.</div>
 </body>
 </html>
