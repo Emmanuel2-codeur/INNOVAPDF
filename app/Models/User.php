@@ -29,7 +29,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'google_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -47,59 +47,11 @@ class User extends Authenticatable implements PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
-            'quota_reset_at' => 'datetime',
         ];
     }
     
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
-    }
-
-    /** Limites du plan gratuit (cahier des charges §17 — structure sans paiement réel pour l'instant). */
-    public const FREE_PLAN_LIMITS = [
-        'documents' => 3,
-        'ai_calls_per_month' => 20,
-    ];
-
-    public function isPremium(): bool
-    {
-        return $this->plan === 'premium';
-    }
-
-    /**
-     * Vérifie et incrémente le quota d'appels IA mensuel. Renvoie false si le
-     * quota du plan gratuit est dépassé (les comptes premium ne sont jamais limités).
-     */
-    public function consumeAiQuota(): bool
-    {
-        if ($this->isPremium()) {
-            return true;
-        }
-
-        // Réinitialisation mensuelle automatique.
-        if (! $this->quota_reset_at || $this->quota_reset_at->lt(now()->startOfMonth())) {
-            $this->ai_calls_this_month = 0;
-            $this->quota_reset_at = now();
-        }
-
-        if ($this->ai_calls_this_month >= self::FREE_PLAN_LIMITS['ai_calls_per_month']) {
-            $this->save();
-            return false;
-        }
-
-        $this->ai_calls_this_month++;
-        $this->save();
-
-        return true;
-    }
-
-    public function hasReachedDocumentLimit(): bool
-    {
-        if ($this->isPremium()) {
-            return false;
-        }
-
-        return $this->documents()->count() >= self::FREE_PLAN_LIMITS['documents'];
     }
 }

@@ -34,10 +34,12 @@ class DocumentController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('Editor', [
             'document' => null,
+            'initialType' => $request->query('type'),
+            'initialTemplate' => $request->query('template'),
         ]);
     }
 
@@ -53,12 +55,6 @@ class DocumentController extends Controller
 
     public function store(Request $request)
     {
-        if ($request->user()->hasReachedDocumentLimit()) {
-            return back()->withErrors([
-                'quota' => 'Limite de ' . \App\Models\User::FREE_PLAN_LIMITS['documents'] . ' documents atteinte pour le plan gratuit. Passe à Premium pour continuer.',
-            ]);
-        }
-
         $validated = $this->validateDocument($request);
 
         $document = $request->user()->documents()->create($validated);
@@ -150,16 +146,7 @@ class DocumentController extends Controller
     {
         $this->authorize('view', $document);
 
-        $view = match ("{$document->type}.{$document->template}") {
-            'cv.minimal' => 'pdf.cv-minimal',
-            'cv.modern' => 'pdf.cv-modern',
-            'cover_letter.default' => 'pdf.cover-letter',
-            'invoice.classic' => 'pdf.invoice-classic',
-            'quote.simple' => 'pdf.quote-simple',
-            'attestation.default' => 'pdf.certificate',
-            'certificate.default' => 'pdf.certificate',
-            default => null,
-        };
+        $view = \App\Http\Controllers\PublicController::resolvePdfView($document->type, $document->template);
 
         abort_if($view === null, 422, "Aucun gabarit d'export PDF pour {$document->type}/{$document->template}.");
 

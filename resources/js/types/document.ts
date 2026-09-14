@@ -8,6 +8,15 @@ export interface ProfileData {
     location: string;
     photoUrl?: string;
     summary?: string;
+    skills?: string[];
+}
+
+export interface EducationItem {
+    id: string;
+    degree: string;
+    school: string;
+    startDate: string;
+    endDate?: string;
 }
 
 export interface ExperienceItem {
@@ -63,6 +72,7 @@ export interface DocumentSchema {
     template: string;
     profile?: ProfileData;
     experiences?: ExperienceItem[];
+    education?: EducationItem[];
     invoiceItems?: InvoiceItem[];
     invoiceMeta?: InvoiceMeta;
     coverLetter?: CoverLetterData;

@@ -17,6 +17,7 @@ export const useDocumentStore = defineStore('document', () => {
             summary: '',
         },
         experiences: [],
+        education: [],
         invoiceItems: [],
         invoiceMeta: {
             taxRate: 0.18,
@@ -88,6 +89,26 @@ export const useDocumentStore = defineStore('document', () => {
         });
     }
 
+    // Gestion de l'éducation (CV)
+    function addEmptyEducation() {
+        if (!currentDocument.value.education) {
+            currentDocument.value.education = [];
+        }
+        currentDocument.value.education.push({
+            id: crypto.randomUUID(),
+            degree: '',
+            school: '',
+            startDate: '',
+            endDate: '',
+        });
+    }
+
+    function removeEducation(id: string) {
+        if (currentDocument.value.education) {
+            currentDocument.value.education = currentDocument.value.education.filter(edu => edu.id !== id);
+        }
+    }
+
     // Gestion des lignes de facturation (Facture)
     function addEmptyInvoiceItem() {
         if (!currentDocument.value.invoiceItems) {
@@ -116,6 +137,8 @@ export const useDocumentStore = defineStore('document', () => {
         addExperience,
         removeExperience,
         addEmptyExperience,
+        addEmptyEducation,
+        removeEducation,
         addEmptyInvoiceItem,
         removeInvoiceItem,
     };

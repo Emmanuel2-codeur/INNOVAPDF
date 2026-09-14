@@ -5,12 +5,22 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+// Connexion Google (Socialite) — accessible sans être connecté, évidemment.
+Route::get('/auth/google/redirect', [App\Http\Controllers\Auth\SocialAuthController::class, 'redirect'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [App\Http\Controllers\Auth\SocialAuthController::class, 'callback'])->name('auth.google.callback');
+
+// Éditeur en libre accès (parcours invité) : on peut créer et prévisualiser un
+// document sans compte. La sauvegarde/export réel exige un compte (routes
+// protégées plus bas) ; l'export "brouillon" ci-dessous permet quand même de
+// télécharger un PDF avant de s'inscrire, comme demandé pour l'UX d'accueil.
+Route::get('/editor/new', [DocumentController::class, 'create'])->name('editor.create');
+Route::middleware('throttle:10,1')->post('/guest/export', [App\Http\Controllers\PublicController::class, 'exportDraft'])->name('guest.export');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DocumentController::class, 'index'])->name('dashboard');
-    Route::inertia('/premium', 'Premium')->name('premium');
 
-    // Éditeur (S2)
-    Route::get('/editor/new', [DocumentController::class, 'create'])->name('editor.create');
+    // Édition d'un document existant : nécessite un compte (vérification de
+    // propriété via policy) — seule la création est ouverte aux invités.
     Route::get('/editor/{document}', [DocumentController::class, 'edit'])->name('editor.edit');
 
     // Import de CV existant (S6/§7) — limité, coûteux en IA + parsing PDF.
@@ -41,7 +51,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Assistant IA (S5) — limité à 20 appels/minute par utilisateur pour éviter
     // le gaspillage d'appels API (cahier des charges §23 "Limitation des appels IA inutiles").
-    Route::middleware(['throttle:20,1', 'ai.quota'])->prefix('ai')->group(function () {
+    Route::middleware('throttle:20,1')->prefix('ai')->group(function () {
         Route::post('/transform', [App\Http\Controllers\AiController::class, 'transform'])->name('ai.transform');
         Route::post('/translate', [App\Http\Controllers\AiController::class, 'translate'])->name('ai.translate');
         Route::post('/summary', [App\Http\Controllers\AiController::class, 'summary'])->name('ai.summary');

@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import MinimalCV from '@/components/Templates/CV/Minimal.vue';
-import ModernCV from '@/components/Templates/CV/Modern.vue';
-import ClassicInvoice from '@/components/Templates/Invoice/Classic.vue';
-import CoverLetterDefault from '@/components/Templates/CoverLetter/Default.vue';
-import QuoteSimple from '@/components/Templates/Quote/Simple.vue';
-import CertificateDefault from '@/components/Templates/Certificate/Default.vue';
+import MonochromeCV from '@/components/Templates/CV/Monochrome.vue';
+import BannerPhotoCV from '@/components/Templates/CV/BannerPhoto.vue';
+import DarkSidebarCV from '@/components/Templates/CV/DarkSidebar.vue';
+import CircularPhotoCV from '@/components/Templates/CV/CircularPhoto.vue';
+import InvoicePurple from '@/components/Templates/Invoice/Purple.vue';
+import InvoiceOrangeBlack from '@/components/Templates/Invoice/OrangeBlack.vue';
+import InvoiceRedWave from '@/components/Templates/Invoice/RedWave.vue';
+import InvoiceBlueClean from '@/components/Templates/Invoice/BlueClean.vue';
+import CoverLetterRoundedGreen from '@/components/Templates/CoverLetter/RoundedGreen.vue';
+import CoverLetterOrganicOrange from '@/components/Templates/CoverLetter/OrganicOrange.vue';
+import CertificateGoldBlack from '@/components/Templates/Certificate/GoldBlack.vue';
+import CertificateBlueGold from '@/components/Templates/Certificate/BlueGold.vue';
 import type { DocumentSchema } from '@/types/document';
 
 const props = defineProps<{
@@ -17,6 +23,7 @@ const doc = {
     ...props.document,
     profile: props.document.content?.profile,
     experiences: props.document.content?.experiences,
+    education: props.document.content?.education,
     invoiceItems: props.document.content?.invoiceItems,
     invoiceMeta: props.document.content?.invoiceMeta,
     coverLetter: props.document.content?.coverLetter,
@@ -35,13 +42,19 @@ const doc = {
             </a>
         </div>
 
-        <div class="w-full max-w-3xl aspect-[210/297] bg-white shadow-lg overflow-hidden">
-            <MinimalCV v-if="doc.type === 'cv' && doc.template === 'minimal'" :doc="doc" />
-            <ModernCV v-if="doc.type === 'cv' && doc.template === 'modern'" :doc="doc" />
-            <CoverLetterDefault v-if="doc.type === 'cover_letter'" :doc="doc" />
-            <ClassicInvoice v-if="doc.type === 'invoice'" :doc="doc" />
-            <QuoteSimple v-if="doc.type === 'quote'" :doc="doc" />
-            <CertificateDefault v-if="['attestation', 'certificate'].includes(doc.type)" :doc="doc" />
+        <div :class="['w-full bg-white shadow-lg overflow-hidden', ['attestation', 'certificate'].includes(doc.type) ? 'max-w-4xl aspect-[297/210]' : 'max-w-3xl aspect-[210/297]']">
+            <MonochromeCV v-if="doc.type === 'cv' && doc.template === 'monochrome'" :doc="doc" />
+            <BannerPhotoCV v-if="doc.type === 'cv' && doc.template === 'photo-banner'" :doc="doc" />
+            <DarkSidebarCV v-if="doc.type === 'cv' && doc.template === 'dark-sidebar'" :doc="doc" />
+            <CircularPhotoCV v-if="doc.type === 'cv' && doc.template === 'circular-photo'" :doc="doc" />
+            <CoverLetterRoundedGreen v-if="doc.type === 'cover_letter' && doc.template === 'rounded-green'" :doc="doc" />
+            <CoverLetterOrganicOrange v-if="doc.type === 'cover_letter' && doc.template === 'organic-orange'" :doc="doc" />
+            <InvoicePurple v-if="['invoice','quote'].includes(doc.type) && doc.template === 'purple'" :doc="doc" />
+            <InvoiceOrangeBlack v-if="['invoice','quote'].includes(doc.type) && doc.template === 'orange-black'" :doc="doc" />
+            <InvoiceRedWave v-if="['invoice','quote'].includes(doc.type) && doc.template === 'red-wave'" :doc="doc" />
+            <InvoiceBlueClean v-if="['invoice','quote'].includes(doc.type) && doc.template === 'blue-clean'" :doc="doc" />
+            <CertificateGoldBlack v-if="['attestation','certificate'].includes(doc.type) && doc.template === 'gold-black'" :doc="doc" />
+            <CertificateBlueGold v-if="['attestation','certificate'].includes(doc.type) && doc.template === 'blue-gold'" :doc="doc" />
         </div>
     </div>
 </template>
